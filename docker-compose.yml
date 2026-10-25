@@ -1,0 +1,30 @@
+services:
+  pihole:
+    image: pihole/pihole:2026.10.0
+    hostname: pihole
+    environment:
+      TZ: ${TZ:-Europe/Berlin}
+      FTLCONF_webserver_api_password: ${PIHOLE_PASSWORD:?set PIHOLE_PASSWORD in .env}
+      FTLCONF_dns_listeningMode: all
+    volumes:
+      - ./etc-pihole:/etc/pihole
+    ports:
+      - "${PIHOLE_DNS_PORT:-53}:53/tcp"
+      - "${PIHOLE_DNS_PORT:-53}:53/udp"
+      - "${PIHOLE_WEB_PORT:-8080}:80/tcp"
+    healthcheck:
+      test: ["CMD", "dig", "+short", "+norecurse", "+retry=0", "@127.0.0.1", "pi.hole"]
+      interval: 5s
+      timeout: 5s
+      # first boot downloads the blocklist before DNS comes up; slow links need the headroom
+      retries: 24
+      start_period: 120s
+    restart: unless-stopped
+
+  # Test-only DNS client; started by tests/run-tests.sh via `docker compose run`.
+  dns-client:
+    image: alpine:3.22
+    profiles: ["test"]
+    depends_on:
+      pihole:
+        condition: service_healthy
